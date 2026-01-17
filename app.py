@@ -432,23 +432,29 @@ def generate_chart(data, items, time_points, item_colors, output_format="png", d
     :param dpi: 图片分辨率
     :return: 生成的图片对象（供Streamlit下载）
     """
-    # 明确设置中文字体，确保所有文本元素使用正确字体
-    # 添加备选字体，解决Streamlit部署后字体缺失问题
-    # 常见中文字体备选：STKaiti（华文楷体）、SimHei（黑体）、SimSun（宋体）、Microsoft YaHei（微软雅黑）、
-    # SimKai（楷体）、FangSong（仿宋）、Microsoft JhengHei（微软正黑）、STSong（华文宋体）、STFangsong（华文仿宋）、
-    # DengXian（等线）、Source Han Sans（思源黑体）、Source Han Serif（思源宋体）
-    plt.rcParams['font.family'] = [
-        'STKaiti', 'SimHei', 'SimSun', 'Microsoft YaHei', 'SimKai', 'FangSong',
-        'Microsoft JhengHei', 'STSong', 'STFangsong', 'DengXian',
-        'Source Han Sans', 'Source Han Serif', 'sans-serif'
-    ]
-    plt.rcParams['font.sans-serif'] = plt.rcParams['font.family']
+    # 明确设置中文字体，使用指定的字体文件
     plt.rcParams['axes.unicode_minus'] = False
     plt.rcParams['text.usetex'] = False  # 禁用LaTeX，避免字体冲突
 
-    # 显式创建字体属性对象，使用备选字体列表
-    from matplotlib.font_manager import FontProperties
-    font_props = FontProperties(family=plt.rcParams['font.family'])
+    # 显式创建字体属性对象，使用指定的字体文件
+    from matplotlib.font_manager import FontProperties, fontManager
+    import os
+    
+    # 指定字体文件路径（使用相对路径，确保在GitHub和Streamlit远程运行时可用）
+    font_path = os.path.join(os.path.dirname(__file__), 'fonts', 'STKAITI.TTF')
+    # 检查字体文件是否存在
+    if os.path.exists(font_path):
+        # 添加字体到字体管理器
+        fontManager.addfont(font_path)
+        # 创建字体属性对象
+        font_props = FontProperties(fname=font_path)
+    else:
+        # 如果字体文件不存在，使用默认字体列表
+        font_props = FontProperties(family=['STKaiti', 'SimHei', 'SimSun', 'Microsoft YaHei', 'SimKai', 'FangSong'])
+    
+    # 设置全局字体
+    plt.rcParams['font.family'] = ['STKaiti']
+    plt.rcParams['font.sans-serif'] = ['STKaiti']
 
     # 计算子图布局 - 双列布局，适合手机观看
     n_items = len(items)

@@ -499,7 +499,7 @@ def generate_chart(data, items, time_points, item_colors, output_format="png", d
             # 数据点光晕效果
             ax.scatter(x, y, s=150, color=item_color, alpha=0.2, zorder=3, edgecolor='none')
             # 得分标注
-            ax.text(x, y + 0.5, f'{int(y)}', ha='center', va='bottom', fontsize=10, fontweight='bold', 
+            ax.text(x, y + 2, f'{int(y)}', ha='center', va='bottom', fontsize=10, fontweight='bold', 
                     color=item_color, zorder=5, bbox=dict(facecolor='white', alpha=0.7, 
                     edgecolor=item_color, boxstyle='round,pad=0.25', linewidth=1), 
                     fontproperties=font_props)
@@ -507,7 +507,7 @@ def generate_chart(data, items, time_points, item_colors, output_format="png", d
             # 说明标注：5字符换行，空说明不显示
             if note:
                 wrapped_note = '\n'.join([note[k:k+5] for k in range(0, len(note), 5)])
-                note_y = y - 0.5  # 固定在数据点下方
+                note_y = y - 2  # 固定在数据点下方
                 ax.text(x, note_y, wrapped_note, ha='center', va='top', 
                         fontsize=11, color='#555555', alpha=0.9, zorder=6, rotation=0, 
                         bbox=dict(facecolor='white', alpha=0.4, edgecolor=item_color, 

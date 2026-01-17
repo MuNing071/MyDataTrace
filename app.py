@@ -441,7 +441,7 @@ def generate_chart(data, items, time_points, item_colors, output_format="png", d
     import os
     
     # 指定字体文件路径（使用相对路径，确保在GitHub和Streamlit远程运行时可用）
-    font_path = os.path.join(os.path.dirname(__file__), 'fonts', 'STKAITI.TTF')
+    font_path = os.path.join(os.path.dirname(__file__), 'STKAITI.TTF')
     # 检查字体文件是否存在
     if os.path.exists(font_path):
         # 添加字体到字体管理器

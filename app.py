@@ -5,6 +5,7 @@ import pandas as pd
 from datetime import datetime
 import io
 
+
 # 设置页面配置
 st.set_page_config(
     page_title="时光数绘轨迹图 MyDataTrace",
@@ -58,6 +59,13 @@ if 'style_config' not in st.session_state:
         'background_color': '#FFFFFF',
         'margin': 10
     }
+
+if 'show_results' not in st.session_state:
+    st.session_state.show_results = False
+
+if 'last_chart_buf' not in st.session_state:
+    st.session_state.last_chart_buf = None
+
 
 if 'data' not in st.session_state:
     st.session_state.data = {}
@@ -185,10 +193,11 @@ def main():
         🖌️用数据当画笔，绘出独属于你的时光轨迹
         1. **📅 选时间范围**：选择要总结的周期（支持季度/月度/年度），默认25年每个季度
         2. **📋 写下想要回顾的问题**：对你的回顾最重要的几个问题。可以修改、删除默认问题，也能点击「➕ 添加问题」新增（建议4~12个）
-        3. **📝 开始回顾和评分**：给每个问题打0-100分，还能加说明（建议30字内）
-        4. **📷 最后，一键生成时光数绘轨迹图**：数据填完后，直接点「🚀 立即生成并显示」即可
+        3. **📝 开始回顾和评分**：给每个问题打0-100分。您可以**直接在页面手动填写**，也可以**上传Excel文件**自动读取。
+        4. **📷 一键生成与备份**：点击「🚀 立即生成并显示」即可看到图形；**建议完成后下载Excel备份**，因为网页刷新后数据会重置。
 
         ✋️ 更多内容可关注 小红书 [@沐宁](https://www.xiaohongshu.com/user/profile/5a05b24ce8ac2b75beec5026)
+        
         """)
     
     # 时间配置
@@ -265,6 +274,44 @@ def main():
     
     # 数据录入
     st.header("📝 开始回顾和评分")
+    st.info("💡 如果很快就能评估完，您可以直接在下方填写您的得分。如果需要一些时间思考和填写，建议下载模版Excel填写后上传。")
+
+    
+    # 数据导入功能
+    with st.expander("📤 导入/恢复数据 (Excel)", expanded=False):
+        uploaded_file = st.file_uploader("上传Excel文件以自动填充数据", type=['xlsx'])
+        if uploaded_file is not None:
+            if st.button("确认导入数据", type="primary"):
+                new_data, new_items, error = excel_to_data(uploaded_file)
+                if error:
+                    st.error(error)
+                else:
+                    st.session_state.data = new_data
+                    st.session_state.config_items = new_items
+                    st.success(f"成功导入 {len(new_items)} 个题项的数据！")
+                    st.rerun()
+        
+        # 模板下载
+        st.markdown("---")
+        st.markdown("##### 下载当前数据模板")
+        st.caption("您可以下载包含当前题项和表头的空模板，填写后再上传。")
+        
+        # 生成模板（使用当前配置但数据为空或使用现有数据）
+        # 这里直接使用当前数据作为模板，方便用户修改
+        template_time_points = generate_time_points(
+            st.session_state.time_config['start_date'],
+            st.session_state.time_config['end_date'],
+            st.session_state.time_config['time_granularity']
+        )
+        template_data = data_to_excel(st.session_state.data, st.session_state.config_items, template_time_points)
+        
+        st.download_button(
+            label="💾 下载数据模板 (包含当前题项)",
+            data=template_data,
+            file_name=f"MyDataTrace_Template_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
     
     # 显示时间点
     time_points = generate_time_points(
@@ -330,20 +377,21 @@ def main():
                         st.markdown("---")
 
     # 在数据录入页面添加生成图片按钮
-    st.subheader("📷 最后，一键生成时光数绘轨迹图")
+    st.subheader("📷 内容导出：生成图表与备份数据")
     
-    output_format = st.selectbox(
-        "输出格式",
-        options=["jpg", "png"],  # 默认jpg格式
-        key="quick_output_format"
-    )
-    
-    # 使用默认参数
-    dpi = 300
-    
-    # 快速生成图片按钮
-    if st.button("🚀 一键生成", type="primary", use_container_width=True):
-        # 生成图片
+    col_out1, col_out2 = st.columns(2)
+    with col_out1:
+        output_format = st.selectbox(
+            "图片格式",
+            options=["jpg", "png"],
+            key="quick_output_format"
+        )
+    with col_out2:
+        dpi = st.number_input("图片清晰度 (DPI)", min_value=100, max_value=600, value=300, step=50)
+
+    # 操作按钮区域
+    if st.button("🚀 立即生成轨迹图并开启导出", type="primary", use_container_width=True):
+        # 计算时间点
         time_points = generate_time_points(
             st.session_state.time_config['start_date'],
             st.session_state.time_config['end_date'],
@@ -357,14 +405,37 @@ def main():
         colors = generate_color_palette(len(items), st.session_state.style_config['color_palette'])
         item_colors = dict(zip(items, colors))
         
-        # 调用图片生成函数
-        buf = generate_chart(data, items, time_points, item_colors, output_format, dpi)
-        
+        # 调用图片生成函数并存入会话状态
+        st.session_state.last_chart_buf = generate_chart(data, items, time_points, item_colors, output_format, dpi)
+        st.session_state.show_results = True
+
+    # 结果显示区域（生成后才显示）
+    if st.session_state.show_results and st.session_state.last_chart_buf:
+        st.divider()
         # 在页面上显示生成的图片
-        st.image(buf, caption="""长按图片或右键保存，可调整后再次生成
+        st.image(st.session_state.last_chart_buf, caption="""长按图片或右键保存
         ✋️ 更多内容可关注 小红书 [@沐宁](https://www.xiaohongshu.com/user/profile/5a05b24ce8ac2b75beec5026)""", use_container_width=True)
-        # 提示用户保存图片
-        st.warning("⚠️生成后记得保存内容和文本哦，网页刷新后可能就没有啦")
+        
+        # 提示用户保存数据
+        st.warning("⚠️ 网页刷新后数据会重置，记得点击下方按钮备份数据！")
+        
+        # 准备数据并提供下载
+        time_points_excel = generate_time_points(
+            st.session_state.time_config['start_date'],
+            st.session_state.time_config['end_date'],
+            st.session_state.time_config['time_granularity']
+        )
+        excel_data = data_to_excel(st.session_state.data, st.session_state.config_items, time_points_excel)
+        
+        st.download_button(
+            label="💾 点击下载Excel",
+            data=excel_data,
+            file_name=f"MyDataTrace_Data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+
+
 
     # 样式配置 - 移到最后
     st.divider()
@@ -415,10 +486,96 @@ def main():
                     custom_colors.append(color)
                 st.session_state.style_config['custom_colors'] = custom_colors
         
+
         # 更新样式配置
         st.session_state.style_config['ncol'] = int(ncol)
         st.session_state.style_config['nrow'] = int(nrow)
         st.session_state.style_config['color_palette'] = color_palette
+
+# Excel 处理函数
+def data_to_excel(data, items, time_points):
+    """将数据转换为Excel文件字节流"""
+    rows = []
+    for tp in time_points:
+        row = {'时间点': tp}
+        for item in items:
+            item_data = data.get(item, {}).get(tp, {})
+            row[f"{item} - 得分"] = item_data.get('得分', 0.0)
+            row[f"{item} - 说明"] = item_data.get('说明', '')
+        rows.append(row)
+    
+    # 构建有序的列名列表，确保Excel易读性
+    columns = ['时间点']
+    for item in items:
+        columns.append(f"{item} - 得分")
+        columns.append(f"{item} - 说明")
+        
+    df = pd.DataFrame(rows, columns=columns)
+    
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='数据')
+    output.seek(0)
+    return output
+
+def excel_to_data(file):
+    """读取Excel文件并返回数据字典和题项列表"""
+    try:
+        df = pd.read_excel(file)
+        
+        data = {}
+        items = []
+        
+        # 验证必需的列
+        if '时间点' not in df.columns:
+            return None, None, "Excel文件缺少'时间点'列"
+        
+        # 识别题项，并保持列出现的顺序
+        columns = [c for c in df.columns if c != '时间点' and ' - ' in c]
+        if not columns:
+            return None, None, "未找到有效的数据列 (格式应为 '题项名 - 得分' 或 '题项名 - 说明')"
+            
+        extracted_items = []
+        seen_items = set()
+        
+        for col in columns:
+            item_name = col.rsplit(' - ', 1)[0]
+            if item_name not in seen_items:
+                extracted_items.append(item_name)
+                seen_items.add(item_name)
+        
+        items = extracted_items
+        
+        # 初始化数据结构
+        for item in items:
+            data[item] = {}
+            
+        # 遍历每行数据
+        for index, row in df.iterrows():
+            tp = str(row['时间点'])
+            for item in items:
+                score_col = f"{item} - 得分"
+                note_col = f"{item} - 说明"
+                
+                # 容错处理：如果列不存在（比如只写了得分没写说明），给默认值
+                score = row.get(score_col, 0.0)
+                note = row.get(note_col, "")
+                
+                # 处理空值
+                if pd.isna(note):
+                    note = ""
+                if pd.isna(score):
+                    score = 0.0
+                    
+                data[item][tp] = {
+                    '得分': float(score),
+                    '说明': str(note)
+                }
+                
+        return data, items, None
+    except Exception as e:
+        return None, None, f"解析Excel失败: {str(e)}"
+
 
 # 图片生成函数
 def generate_chart(data, items, time_points, item_colors, output_format="png", dpi=400):
